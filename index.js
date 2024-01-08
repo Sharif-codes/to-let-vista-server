@@ -187,9 +187,9 @@ async function run() {
       res.send(result)
     })
     //get all properties homepage
-    app.get('/property/', async (req, res) => {
-      const category= req.params.category
-      const query={status: "available"}
+    app.get('/property', async (req, res) => {
+      // const category = req.params.category
+      const query = { status: "available" }
       const result = await propertyCollection.find(query).toArray()
       res.send(result)
     })
@@ -254,25 +254,25 @@ async function run() {
       res.send(result)
     })
     //Accept booking Request
-    app.post("/booking/accept/:id", async (req,res)=>{
-      const id= req.params.id
-      const query={_id: new ObjectId(id)}
-      const updateStatus= {
-        $set:{
+    app.post("/booking/accept/:id", async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const updateStatus = {
+        $set: {
           status: "accepted"
         }
       }
-      await bookingRequestCollection.updateOne(query,updateStatus)
-      const addBookingData= await bookingRequestCollection.findOne(query)
-      const result= await bookingCollection.insertOne(addBookingData)
+      await bookingRequestCollection.updateOne(query, updateStatus)
+      const addBookingData = await bookingRequestCollection.findOne(query)
+      const result = await bookingCollection.insertOne(addBookingData)
       await bookingRequestCollection.deleteOne(query)
       res.send(result)
     })
     //Reject Booking Request
-    app.post("/booking/reject/:id", async (req,res)=>{
-      const id= req.params.id
-      const query={_id: new ObjectId(id)}
-      const result= await bookingRequestCollection.deleteOne(query)
+    app.post("/booking/reject/:id", async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const result = await bookingRequestCollection.deleteOne(query)
       res.send(result)
     })
     app.post("/create-payment-intent", verifyToken, async (req, res) => {
@@ -290,21 +290,32 @@ async function run() {
     })
     app.post("/payment", verifyToken, async (req, res) => {
       const paymentData = req.body
-      const bookingID= req.body.bookingID
-      const proprtyID= req.body.propertyID
-      const statusChanged= {
-        $set:{
-          status:"booked"
+      const bookingID = req.body.bookingID
+      const proprtyID = req.body.propertyID
+      const statusChanged = {
+        $set: {
+          status: "booked"
         }
       }
-    await bookingCollection.updateOne({_id: new ObjectId(bookingID)},statusChanged)
-    await propertyCollection.updateOne({_id: new ObjectId(proprtyID)},statusChanged)
-    const result = await paymentCollection.insertOne(paymentData)
+      await bookingCollection.updateOne({ _id: new ObjectId(bookingID) }, statusChanged)
+      await propertyCollection.updateOne({ _id: new ObjectId(proprtyID) }, statusChanged)
+      const result = await paymentCollection.insertOne(paymentData)
       res.send(result)
     })
-    app.get("/Allbookings", async (req,res)=>{
-      const result= await bookingRequestCollection.find().toArray()
+    app.get("/Allbookings", async (req, res) => {
+      const result = await bookingRequestCollection.find().toArray()
       console.log(result);
+      res.send(result)
+    })
+    app.get("/memberPayment/:email", async (req, res) => {
+      const email = req.params.email
+      console.log("member email: ", email);
+      const query= {email: email}
+      const result= await paymentCollection.find(query).toArray()
+      res.send(result)
+    })
+    app.get("/allAcceptedBookings", async (req,res)=>{
+      const result= await bookingCollection.find().toArray()
       res.send(result)
     })
     // Send a ping to confirm a successful connection
