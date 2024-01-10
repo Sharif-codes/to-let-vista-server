@@ -7,6 +7,13 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
 const jwt = require('jsonwebtoken')
 const morgan = require('morgan')
 const stripe = require("stripe")(process.env.PAYMENT_SK);
+const formData = require('form-data');
+const Mailgun = require('mailgun.js');
+const mailgun = new Mailgun(formData);
+const mg = mailgun.client({
+  username: 'api',
+  key: process.env.MAIL_GUN_API_KEY,
+})
 const port = process.env.PORT || 5000
 
 // middleware
@@ -36,6 +43,7 @@ async function run() {
     const bookingCollection = client.db('toLetDB').collection('bookings')
     const toLetRequestCoolection = client.db('toLetDB').collection('ToletRequests')
     const paymentCollection = client.db('toLetDB').collection('payments')
+    const ownerShipReqCollection = client.db('toLetDB').collection('ownership')
 
     app.post('/jwt', async (req, res) => {
       const user = req.body
@@ -300,6 +308,15 @@ async function run() {
       await bookingCollection.updateOne({ _id: new ObjectId(bookingID) }, statusChanged)
       await propertyCollection.updateOne({ _id: new ObjectId(proprtyID) }, statusChanged)
       const result = await paymentCollection.insertOne(paymentData)
+
+      mg.messages
+        .create(process.env.MAIL_SENDING_DOMAIN, {
+          from: "Mailgun Sandbox <postmaster@sandbox80ec28c84b714ceaa186bb3baa7d53ac.mailgun.org>",
+          to: ["sharifxenjia@gmail.com"],
+          subject: "Confirmation of Payment",
+          text: `Your Property is booked successfully! Transaction Id:  ${paymentData.TransactionId}`,
+        })
+
       res.send(result)
     })
     app.get("/Allbookings", async (req, res) => {
@@ -310,13 +327,112 @@ async function run() {
     app.get("/memberPayment/:email", async (req, res) => {
       const email = req.params.email
       console.log("member email: ", email);
-      const query= {email: email}
-      const result= await paymentCollection.find(query).toArray()
+      const query = { email: email }
+      const result = await paymentCollection.find(query).toArray()
       res.send(result)
     })
-    app.get("/allAcceptedBookings", async (req,res)=>{
-      const result= await bookingCollection.find().toArray()
+    app.get("/allAcceptedBookings", async (req, res) => {
+      const result = await bookingCollection.find().toArray()
       res.send(result)
+    })
+
+    //Ownership request added
+    app.post("/ownershipRequest", async (req, res) => {
+      try {
+        const data = req.body;
+        // console.log(data);
+        // Wrap the email in an object with a field like 'email'
+        // const requestData = { data };
+
+        // Insert the wrapped data into the collection
+        const result = await ownerShipReqCollection.insertOne(data);
+
+        // Send the result back as a response
+        res.send(result);
+      } catch (error) {
+        console.error("Error in ownership request:", error);
+        res.status(500).send("Internal Server Error");
+      }
+    });
+
+    app.get("/ownershipRequest", async (req, res) => {
+      const result = await ownerShipReqCollection.find().toArray()
+      res.send(result)
+    })
+    app.patch("/acceptOwnershipReq/:email", async (req, res) => {
+      const email = req.params.email
+      const query = { email: email }
+      const userReq = await ownerShipReqCollection.findOne(query)
+      const userFind = await usersCollection.findOne(query)
+      console.log("user Details", userFind);
+      const updatedDoc = {
+        $set: {
+          role: "owner"
+        }
+      }
+      const result = await usersCollection.updateOne(query, updatedDoc)
+      await ownerShipReqCollection.deleteOne(userReq)
+      res.send(result)
+    })
+    app.delete("/acceptOwnershipReq/:email", async (req, res) => {
+      const email = req.params.email
+      const query = { email: email }
+      const user = await ownerShipReqCollection.findOne(query)
+      const result = await ownerShipReqCollection.deleteOne(user)
+      res.send(result)
+    })
+    app.get("/getUser", async (req, res) => {
+      const result = await usersCollection.find().toArray()
+      res.send(result)
+    })
+    app.delete("/deleteUser/:id", async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const user = await usersCollection.findOne(query)
+      const result = await usersCollection.deleteOne(user)
+      res.send(result)
+    })
+    app.delete("/deleteProperty/:id", async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const user = await propertyCollection.findOne(query)
+      const result = await propertyCollection.deleteOne(user)
+      res.send(result)
+    })
+    app.patch("/updateProperty/:id", async (req, res) => {
+      const id = req.params.id
+      const data = req.body
+      const filter = { _id: new ObjectId(id) }
+      const updatedDoc = {
+        $set: {
+          title: data.title,
+
+          category: data.category,
+          type: data.type,
+          city: data.city,
+          location: data.location,
+          house: data.house,
+          floor: data.floor,
+          bedrooms: data.bedrooms,
+          bathrooms: data.bathrooms,
+          balcony: data.balcony,
+          rent: data.rent,
+          advance: data.advance,
+          service: data.service,
+          image1: data.image1,
+          image2: data.image2,
+          image3: data.image3,
+          host_name: data.host_name,
+          host_pic: data.host_pic,
+          date: data.data,
+          host_email: data.host_email,
+          status: data.status,
+          propertyDetails: data.propertyDetails
+        }
+      }
+      const result = await propertyCollection.updateOne(filter, updatedDoc)
+      res.send(result)
+
     })
     // Send a ping to confirm a successful connection
     await client.db('admin').command({ ping: 1 })
